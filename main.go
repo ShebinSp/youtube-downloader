@@ -79,12 +79,12 @@ func main() {
 	wg.Wait()
 	defer helpers.ClearTemp(fileInfo.VideoPath, fileInfo.AudioPath)
 
-	fmt.Printf("\n\n💾video saved successfully to %s🏁\n", opPath)
+	fmt.Printf("\n\n💾 video saved successfully to %s🏁\n", opPath)
 	fmt.Println("⏲ Elapsed time to download files: ", downloadTime)
 	fmt.Printf("⏳ Total download and process duration: %v\n\n", time.Since(now))
 
-	fmt.Println("\n*--------------------------------------------------------------------------*")
-	fmt.Println("|                              BYE👋 BYE👋                                 |")
-	fmt.Printf("*--------------------------------------------------------------------------*\n\n\n")
+	fmt.Println("\n		*--------------------------------------------------------------------------*")
+	fmt.Println("		|                              BYE👋 BYE👋                                 |")
+	fmt.Printf("		*--------------------------------------------------------------------------*\n\n\n")
 	time.Sleep(3 * time.Second)
 }
