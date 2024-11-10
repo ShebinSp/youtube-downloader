@@ -1,13 +1,13 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"os"
 	"os/signal"
 	"path/filepath"
 	"sync"
-	"syscall"
 	"time"
 
 	"github.com/ShebinSp/yt-downloader/yt-service/helpers"
@@ -15,6 +15,7 @@ import (
 )
 
 func main() {
+
 	fmt.Println("\n     🎞🎞🎞🎞🎞🎞🎞 YouTube Downloader 🎞🎞🎞🎞🎞🎞🎞")
 	fmt.Printf("\n🔴 use this application for educational purpose only! 🔴\n")
 	fmt.Printf("🛑 Press CTRL + C to stop the program\n\n")
@@ -24,30 +25,30 @@ func main() {
 	pathCh := make(chan helpers.Path, 1)
 	downloadDone := make(chan bool)
 	mergeDone := make(chan bool)
-	sig := make(chan os.Signal, 1)
-	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
+
 	wg := &sync.WaitGroup{}
 	defer close(pathCh)
-	defer close(sig)
+	// ctx, cancel := context.WithCancel(context.Background())
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
+	defer stop()
 
-	fmt.Println("⌨️ Enter the YouTube video url to download⟹")
+	fmt.Println("⌨️ Enter the YouTube video URL to download⪼")
+	fmt.Print("⪼ ")
 	fmt.Scanf("%s", &videoID)
 	fmt.Println()
 
+	// Get the Download folder of the user
 	go helpers.GetDownlaodFolder(pathCh)
 
+	// Start the spinner and Download the video and audio files
 	wg.Add(1)
 	go helpers.ShowSpinner(downloadDone, wg)
 	fileInfo, err := ytservice.DownloadYoutubeVideo(videoID)
 	if err != nil {
 		log.Fatalf("Failed to download the video: %v\n", err)
 	}
-	go func() {
-		<-sig
-		fmt.Println("Signal received, Stoping the program...")
-		helpers.ClearTemp(fileInfo.VideoPath, fileInfo.AudioPath)
-		os.Exit(0)
-	}()
+
+	// Stop the spinner and save the download time
 	downloadDone <- true
 	downloadTime := time.Since(now)
 
@@ -56,35 +57,41 @@ func main() {
 	wg.Add(1)
 	go helpers.ShowElapsedTime(mergeDone, wg)
 
+	// Getting the file path ie, Download folder from buffered channel
 	path := <-pathCh
 	opPath := path.Path
 	if path.Err != nil {
-		log.Println("Failed to save file to Download folder")
-		opPath = filepath.Join("/C/")
+		log.Println("Failed to find the Download folder")
+		opPath = filepath.Join("C:/")
 	}
 
+	// Creating the file name with complete path to Download folder
 	outputPath := filepath.Join(opPath, fileInfo.VideoName)
 
-	if err != nil {
-		log.Printf("Sorry: %v\n", err)
-	}
-
-	err = helpers.MergeMedia(fileInfo.VideoPath, fileInfo.AudioPath, outputPath)
-	if err != nil {
+	// Call to merge media with ctx, video path, audio path and output path
+	err = helpers.MergeMedia(ctx, fileInfo.VideoPath, fileInfo.AudioPath, outputPath)
+	if err != nil && err != context.Canceled {
+		// If any errors from the python or cmd.CombinedOutput()
+		mergeDone <- true
 		helpers.ClearTemp(fileInfo.VideoPath, fileInfo.AudioPath)
 		log.Printf("Failed to merge the video: %v\n", err)
 		return
+	} else if err == context.Canceled {
+		// In case of program termination from the user
+		mergeDone <- true
+		time.Sleep(3 * time.Second)
+		helpers.ClearTemp(fileInfo.VideoPath, fileInfo.AudioPath)
+		ok := helpers.DeleteFromRoot(fileInfo.VideoPath)
+		if ok {
+			helpers.TermLog()
+		} else {
+			os.Exit(1)
+		}
+	} else {
+		mergeDone <- true
+		helpers.SuccessLog(opPath, downloadTime, now)
+		helpers.ClearTemp(fileInfo.VideoPath, fileInfo.AudioPath)
 	}
-	mergeDone <- true
+
 	wg.Wait()
-	defer helpers.ClearTemp(fileInfo.VideoPath, fileInfo.AudioPath)
-
-	fmt.Printf("\n\n💾 video saved successfully to %s🏁\n", opPath)
-	fmt.Println("⏲ Elapsed time to download files: ", downloadTime)
-	fmt.Printf("⏳ Total download and process duration: %v\n\n", time.Since(now))
-
-	fmt.Println("\n		*--------------------------------------------------------------------------*")
-	fmt.Println("		|                              BYE👋 BYE👋                                 |")
-	fmt.Printf("		*--------------------------------------------------------------------------*\n\n\n")
-	time.Sleep(3 * time.Second)
 }
