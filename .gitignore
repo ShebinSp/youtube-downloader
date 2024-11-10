@@ -1,0 +1,2 @@
+# Ignore Windows cache files
+%SystemDrive%/ProgramData/Microsoft/Windows/Caches/
